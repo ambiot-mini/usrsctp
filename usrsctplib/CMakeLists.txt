@@ -45,11 +45,19 @@ set(CMAKE_MACOSX_RPATH 		1)
 
 include(CheckCCompilerFlag)
 
+
+option(SCTP_USE_MBEDTLS_SHA1 "Build with mbedtls sha1 support." ON)
+
 add_definitions(-D__Userspace__)
 add_definitions(-DSCTP_SIMPLE_ALLOCATOR)
 add_definitions(-DSCTP_PROCESS_LEVEL_LOCKS)
 if(NOT sctp_use_lwip)
 	add_definitions(-D__native_client__)
+endif()
+
+if(SCTP_USE_MBEDTLS_SHA1)
+	add_definitions(-DSCTP_USE_MBEDTLS_SHA1)
+	find_package(MbedTLS REQUIRED)
 endif()
 
 
@@ -175,11 +183,19 @@ add_library(usrsctp-static STATIC ${usrsctp_sources} ${usrsctp_headers})
 target_include_directories(usrsctp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(usrsctp-static PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+if(SCTP_USE_MBEDTLS_SHA1)
+	target_include_directories(usrsctp PRIVATE ${MBEDTLS_INCLUDE_DIRS})
+endif()
+
 if (WIN32)
 	message(STATUS "link library: ws2_32")
 	target_link_libraries(usrsctp ws2_32 iphlpapi.lib)
 	target_link_libraries(usrsctp-static ws2_32 iphlpapi.lib)
 endif ()
+
+if(SCTP_USE_MBEDTLS_SHA1)
+	target_link_libraries(usrsctp PRIVATE ${MBEDTLS_LIBRARIES})
+endif()
 
 set_target_properties(usrsctp-static PROPERTIES OUTPUT_NAME "usrsctp")
 set_target_properties(usrsctp PROPERTIES IMPORT_SUFFIX "_import.lib")

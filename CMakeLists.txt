@@ -62,16 +62,16 @@ if (sctp_inet)
 	add_definitions(-DINET)
 endif ()
 
-option(sctp_inet6 "Support IPv6" 1)
+option(sctp_inet6 "Support IPv6" 0)
 if (sctp_inet6)
 	add_definitions(-DINET6)
 endif ()
 
-option(sctp_werror "Treat warning as error" 1)
+option(sctp_werror "Treat warning as error" 0)
 
 option(sctp_link_programs_static "Link example programs static" 0)
 
-option(sctp_build_programs "Build example programs" 1)
+option(sctp_build_programs "Build example programs" 0)
 
 option(sctp_sanitizer_address "Compile with address sanitizer" 0)
 

@@ -57,7 +57,9 @@ endif()
 
 if(SCTP_USE_MBEDTLS_SHA1)
 	add_definitions(-DSCTP_USE_MBEDTLS_SHA1)
-	find_package(MbedTLS REQUIRED)
+	if(NOT sctp_use_rtos)
+		find_package(MbedTLS REQUIRED)
+	endif()
 endif()
 
 

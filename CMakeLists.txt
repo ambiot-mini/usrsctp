@@ -82,10 +82,16 @@ option(sctp_sanitizer_memory "Compile with memory sanitizer" 0)
 option(sctp_build_fuzzer "Compile in clang fuzzing mode" 0)
 
 option(sctp_use_lwip "build with lwip" ON)
+option(sctp_use_rtos "build with rtos" ON)
 
 if(sctp_use_lwip)
 	add_definitions(-DSCTP_USE_LWIP)
 endif()
+
+if(sctp_use_rtos)
+	add_definitions(-DSCTP_USE_RTOS)
+endif()
+
 
 if (sctp_sanitizer_address AND sctp_sanitizer_memory)
 	message(FATAL_ERROR "Can not compile with both sanitizer options")

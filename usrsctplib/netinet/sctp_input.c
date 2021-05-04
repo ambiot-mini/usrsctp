@@ -54,15 +54,9 @@ __FBSDID("$FreeBSD: head/sys/netinet/sctp_input.c 363194 2020-07-14 20:32:50Z tu
 #if defined(__FreeBSD__) && !defined(__Userspace__)
 #include <netinet/sctp_kdtrace.h>
 #endif
-#if defined(INET) || defined(INET6)
-#if !defined(_WIN32)
-#if 0
-#include <netinet/udp.h>
-#else
-#include "lwip/udp.h"
-#endif
-#endif
-#endif
+
+#include <netinet/sctp_udp_port.h>
+
 #if defined(__FreeBSD__) && !defined(__Userspace__)
 #include <sys/smp.h>
 #endif
@@ -5794,13 +5788,13 @@ sctp_common_input_processing(struct mbuf **mm, int iphlen, int offset, int lengt
 			    (net != NULL) && (net->port != port)) {
 				if (net->port == 0) {
 					/* UDP encapsulation turned on. */
-					net->mtu -= sizeof(struct udp_hdr);
+					net->mtu -= sizeof(STRUCT_UDP_HDR);
 					if (stcb->asoc.smallest_mtu > net->mtu) {
 						sctp_pathmtu_adjustment(stcb, net->mtu);
 					}
 				} else if (port == 0) {
 					/* UDP encapsulation turned off. */
-					net->mtu += sizeof(struct udp_hdr);
+					net->mtu += sizeof(STRUCT_UDP_HDR);
 					/* XXX Update smallest_mtu */
 				}
 				net->port = port;
@@ -5836,13 +5830,13 @@ sctp_common_input_processing(struct mbuf **mm, int iphlen, int offset, int lengt
 	    (net != NULL) && (net->port != port)) {
 		if (net->port == 0) {
 			/* UDP encapsulation turned on. */
-			net->mtu -= sizeof(struct udp_hdr);
+			net->mtu -= sizeof(STRUCT_UDP_HDR);
 			if (stcb->asoc.smallest_mtu > net->mtu) {
 				sctp_pathmtu_adjustment(stcb, net->mtu);
 			}
 		} else if (port == 0) {
 			/* UDP encapsulation turned off. */
-			net->mtu += sizeof(struct udp_hdr);
+			net->mtu += sizeof(STRUCT_UDP_HDR);
 			/* XXX Update smallest_mtu */
 		}
 		net->port = port;
@@ -5960,13 +5954,13 @@ sctp_common_input_processing(struct mbuf **mm, int iphlen, int offset, int lengt
 			    (net != NULL) && (net->port != port)) {
 				if (net->port == 0) {
 					/* UDP encapsulation turned on. */
-					net->mtu -= sizeof(struct udp_hdr);
+					net->mtu -= sizeof(STRUCT_UDP_HDR);
 					if (stcb->asoc.smallest_mtu > net->mtu) {
 						sctp_pathmtu_adjustment(stcb, net->mtu);
 					}
 				} else if (port == 0) {
 					/* UDP encapsulation turned off. */
-					net->mtu += sizeof(struct udp_hdr);
+					net->mtu += sizeof(STRUCT_UDP_HDR);
 					/* XXX Update smallest_mtu */
 				}
 				net->port = port;
@@ -6213,7 +6207,7 @@ sctp_input_with_port(struct mbuf *i_pak, int off, uint16_t port)
 	uint32_t vrf_id = 0;
 	uint8_t ecn_bits;
 	struct sockaddr_in src, dst;
-	struct ip_hdr *ip
+	STRUCT_IP_HDR *ip
 
 	struct sctphdr *sh;
 	struct sctp_chunkhdr *ch;
@@ -6282,11 +6276,7 @@ sctp_input_with_port(struct mbuf *i_pak, int off, uint16_t port)
 			return;
 		}
 	}
-	#if 0
-	ip = mtod(m, struct ip_hdr *);
-	#else
-	ip = mtod(m, struct ip_hdr *);
-	#endif
+	ip = mtod(m, STRUCT_IP_HDR *);
 
 	sh = (struct sctphdr *)((caddr_t)ip + iphlen);
 	ch = (struct sctp_chunkhdr *)((caddr_t)sh + sizeof(struct sctphdr));
@@ -6297,32 +6287,32 @@ sctp_input_with_port(struct mbuf *i_pak, int off, uint16_t port)
 	src.sin_len = sizeof(struct sockaddr_in);
 #endif
 	src.sin_port = sh->src_port;
-	src.sin_addr = ip->src;
+	src.sin_addr = GET_IP_SRC(ip);
 	memset(&dst, 0, sizeof(struct sockaddr_in));
 	dst.sin_family = AF_INET;
 #ifdef HAVE_SIN_LEN
 	dst.sin_len = sizeof(struct sockaddr_in);
 #endif
 	dst.sin_port = sh->dest_port;
-	dst.sin_addr = ip->dest;
+	dst.sin_addr = GET_IP_DEST(ip);
 #if defined(_WIN32) && !defined(__Userspace__)
-	NTOHS(ip->_len);
+	NTOHS(GET_IP_LEN(ip));
 #endif
 #if defined(__linux__) || (defined(_WIN32) && defined(__Userspace__))
-	ip->_len = ntohs(ip->_len);
+	GET_IP_LEN(ip) = ntohs(GET_IP_LEN(ip));
 #endif
 #if defined(__Userspace__)
 #if defined(__linux__) || defined(_WIN32)
-	length = ip->_len;
+	length = GET_IP_LEN(ip);
 #else
-	length = ip->_len + iphlen;
+	length = GET_IP_LEN(ip) + iphlen;
 #endif
 #elif defined(__FreeBSD__)
-	length = ntohs(ip->_len);
+	length = ntohs(GET_IP_LEN(ip));
 #elif defined(__APPLE__)
-	length = ip->_len + iphlen;
+	length = GET_IP_LEN(ip) + iphlen;
 #else
-	length = ip->_len;
+	length = GET_IP_LEN(ip);
 #endif
 	/* Validate mbuf chain length with IP payload length. */
 	if (SCTP_HEADER_LEN(m) != length) {
@@ -6338,7 +6328,7 @@ sctp_input_with_port(struct mbuf *i_pak, int off, uint16_t port)
 	if (SCTP_IS_IT_BROADCAST(dst.sin_addr, m)) {
 		goto out;
 	}
-	ecn_bits = ip->_tos;
+	ecn_bits = GET_IP_TOS(iphdr);
 #if defined(__FreeBSD__) && !defined(__Userspace__)
 	if (m->m_pkthdr.csum_flags & CSUM_SCTP_VALID) {
 		SCTP_STAT_INCR(sctps_recvhwcrc);
@@ -6395,11 +6385,7 @@ sctp_input(struct mbuf *m, int off)
 #if defined(__FreeBSD__) && !defined(__Userspace__)
 #if defined(SCTP_MCORE_INPUT) && defined(SMP)
 	if (mp_ncpus > 1) {
-		#if 0
-		struct ip_hdr *ip;
-		#else
-		struct ip_hdr *ip;
-		#endif
+		STRUCT_IP_HDR *ip;
 		struct sctphdr *sh;
 		int offset;
 		int cpu_to_use;
@@ -6418,11 +6404,7 @@ sctp_input(struct mbuf *m, int off)
 					return (IPPROTO_DONE);
 				}
 			}
-			#if 0
-			ip = mtod(m, struct ip_hdr *);
-			#else
-			ip = mtod(m, struct ip_hdr *);
-			#endif
+			ip = mtod(m, STRUCT_IP_HDR *);
 			sh = (struct sctphdr *)((caddr_t)ip + off);
 			tag = htonl(sh->v_tag);
 			flowid = tag ^ ntohs(sh->dest_port) ^ ntohs(sh->src_port);

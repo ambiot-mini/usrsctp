@@ -42,7 +42,7 @@
  */
 
 
-#if 0
+#if !defined(SCTP_USE_LWIP)
 #include <errno.h>
 #else
 #include "lwip/errno.h"
@@ -291,6 +291,13 @@ typedef char* caddr_t;
 #if defined(__DragonFly__) || defined(__FreeBSD__) || defined(__linux__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__native_client__) || defined(__Fuchsia__)
 #include <pthread.h>
 #endif
+
+#if defined(SCTP_USE_LWIP)
+#define IPVERSION  4
+#define CMSG_ALIGN(len) (((len) + sizeof (size_t) - 1) \
+			 & (size_t) ~(sizeof (size_t) - 1))
+#endif/* */
+
 typedef pthread_mutex_t userland_mutex_t;
 typedef pthread_cond_t userland_cond_t;
 typedef pthread_t userland_thread_t;
@@ -325,9 +332,9 @@ typedef pthread_t userland_thread_t;
 
 /*#include <packon.h>
 #pragma pack(push, 1)*/
-struct ip_hdr {
+struct ip {
 	u_char    ip_hl:4, ip_v:4;
-	u_char    _tos;
+	u_char    ip_tos;
 	u_short   ip_len;
 	u_short   ip_id;
 	u_short   ip_off;
@@ -351,7 +358,7 @@ struct ifaddrs {
 	void		*ifa_data;
 };
 
-struct udp_hdr {
+struct udphdr {
 	uint16_t uh_sport;
 	uint16_t uh_dport;
 	uint16_t uh_ulen;
@@ -462,15 +469,11 @@ struct sx {int dummy;};
 #if !defined(_WIN32) && !defined(__native_client__)
 #include <net/if.h>
 #include <netinet/in.h>
-#if 0
+#if !defined(SCTP_USE_LWIP)
 #include <netinet/in_systm.h>
 #endif
 
-#if 0
-#include <netinet/ip.h>
-#else
-#include "lwip/ip.h"
-#endif
+#include <netinet/sctp_ip_port.h>
 
 #endif
 #if defined(HAVE_NETINET_IP_ICMP_H)
@@ -485,7 +488,7 @@ struct sx {int dummy;};
 #include <sys/types.h>
 #if !defined(_WIN32)
 #if defined(INET) || defined(INET6)
-#if 0
+#if !defined(SCTP_USE_LWIP)
 #include <ifaddrs.h>
 #endif
 #endif
@@ -522,14 +525,14 @@ struct sx {int dummy;};
 #include <netipsec/ipsec6.h>
 #endif
 #if !defined(_WIN32)
-#if 0
+#if !defined(SCTP_USE_LWIP)
 #include <netinet/ip6.h>
 #endif
 #endif
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__linux__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(_WIN32)
 #include "user_ip6_var.h"
 #else
-#if 0
+#if !defined(SCTP_USE_LWIP)
 #include <netinet6/ip6_var.h>
 #endif
 #endif
@@ -610,7 +613,7 @@ MALLOC_DECLARE(SCTP_M_SOCKOPT);
 #define SCTPDBG(level, ...)					\
 {								\
 	do {							\
-		if (1) {	\
+		if (SCTP_BASE_SYSCTL(sctp_debug_on) & level) {	\
 			SCTP_PRINTF(__VA_ARGS__);		\
 		}						\
 	} while (0);						\
@@ -618,7 +621,7 @@ MALLOC_DECLARE(SCTP_M_SOCKOPT);
 #define SCTPDBG_ADDR(level, addr)				\
 {								\
 	do {							\
-		if (1) {	\
+		if (SCTP_BASE_SYSCTL(sctp_debug_on) & level ) {	\
 		    sctp_print_address(addr);			\
 		}						\
 	} while (0);						\
@@ -647,10 +650,6 @@ MALLOC_DECLARE(SCTP_M_SOCKOPT);
 #define SCTP_LTRACE_ERR_RET_PKT(m, inp, stcb, net, file, err)
 #define SCTP_LTRACE_ERR_RET(inp, stcb, net, file, err)
 #endif
-
-
-#define SCTP_ENTER() SCTP_PRINTF("%s enter.\n", __func__);
-#define SCTP_LEAVE() SCTP_PRINTF("%s leave.\n", __func__);
 
 
 /*
@@ -1017,7 +1016,7 @@ int sctp_userspace_get_mtu_from_ifn(uint32_t if_index, int af);
 
 #define AF_CONN 123
 struct sockaddr_conn {
-#if 1
+#ifdef HAVE_SCONN_LEN
 	uint8_t sconn_len;
 	uint8_t sconn_family;
 #else

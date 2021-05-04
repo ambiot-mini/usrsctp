@@ -45,6 +45,7 @@
 #include <netinet/sctp_var.h>
 #include <netinet/sctp_pcb.h>
 #include <netinet/sctp_input.h>
+#include <netinet/sctp_in_port.h>
 #if 0
 #if defined(__linux__)
 #include <linux/netlink.h>
@@ -101,6 +102,7 @@ sctp_handle_ifamsg(unsigned char type, unsigned short index, struct sockaddr *sa
 	if ((type != RTM_NEWADDR) && (type != RTM_DELADDR)) {
 		return;
 	}
+
 	rc = getifaddrs(&ifas);
 	if (rc != 0) {
 		return;
@@ -265,11 +267,7 @@ static void *
 recv_function_raw(void *arg)
 {
 	struct mbuf **recvmbuf;
-	#if 0
-	struct ip_hdr *iphdr;
-	#else
-	struct ip_hdr  *iphdr;
-	#endif
+	STRUCT_IP_HDR  *iphdr;
 	struct sctphdr *sh;
 	uint16_t port;
 	int offset, ecn = 0;
@@ -373,37 +371,29 @@ recv_function_raw(void *arg)
 				(to_fill)++;
 			} while (ncounter > 0);
 		}
-		#if 0
-		iphdr = mtod(recvmbuf[0], struct ip_hdr *);
-		sh = (struct sctphdr *)((caddr_t)iphdr + sizeof(struct ip));
-		#else
-		iphdr = mtod(recvmbuf[0], struct ip_hdr *);
-		sh = (struct sctphdr *)((caddr_t)iphdr + sizeof(struct ip_hdr));
-		#endif
-		
-		ch = (struct sctp_chunkhdr *)((caddr_t)sh + sizeof(struct sctphdr));
-		#if 0
-		offset = sizeof(struct ip_hdr) + sizeof(struct sctphdr);
-		#else
-		offset = sizeof(struct ip_hdr) + sizeof(struct sctphdr);
-		#endif
 
-		if (iphdr->_tos != 0) {
-			ecn = iphdr->_tos & 0x02;
+		iphdr = mtod(recvmbuf[0], STRUCT_IP_HDR *);
+		sh = (struct sctphdr *)((caddr_t)iphdr + sizeof(STRUCT_IP_HDR));
+		ch = (struct sctp_chunkhdr *)((caddr_t)sh + sizeof(struct sctphdr));
+		offset = sizeof(STRUCT_IP_HDR) + sizeof(struct sctphdr);
+
+
+		if (GET_IP_TOS(iphdr) != 0) {
+			ecn = GET_IP_TOS(iphdr) & 0x02;
 		}
 
 		dst.sin_family = AF_INET;
 #ifdef HAVE_SIN_LEN
 		dst.sin_len = sizeof(struct sockaddr_in);
 #endif
-		dst.sin_addr.s_addr = iphdr->dest.addr;
+		dst.sin_addr.s_addr = GET_IP_DEST_ADDR(iphdr);
 		dst.sin_port = sh->dest_port;
 
 		src.sin_family = AF_INET;
 #ifdef HAVE_SIN_LEN
 		src.sin_len = sizeof(struct sockaddr_in);
 #endif
-		src.sin_addr.s_addr = iphdr->src.addr;
+		src.sin_addr.s_addr = GET_IP_SRC_ADDR(iphdr);
 		src.sin_port = sh->src_port;
 
 		/* SCTP does not allow broadcasts or multicasts */
@@ -429,23 +419,13 @@ recv_function_raw(void *arg)
 		}
 		SCTPDBG(SCTP_DEBUG_USR, "%s: Received %d bytes.", __func__, n);
 		SCTPDBG(SCTP_DEBUG_USR, " - calling sctp_common_input_processing with off=%d\n", offset);
-		#if 0
-		sctp_common_input_processing(&recvmbuf[0], sizeof(struct ip_hdr), offset, n,
+		sctp_common_input_processing(&recvmbuf[0], sizeof(STRUCT_IP_HDR), offset, n,
 		                             (struct sockaddr *)&src,
 		                             (struct sockaddr *)&dst,
 		                             sh, ch,
 		                             compute_crc,
 		                             ecn,
 		                             SCTP_DEFAULT_VRFID, port);
-		#else
-		sctp_common_input_processing(&recvmbuf[0], sizeof(struct ip_hdr), offset, n,
-		                             (struct sockaddr *)&src,
-		                             (struct sockaddr *)&dst,
-		                             sh, ch,
-		                             compute_crc,
-		                             ecn,
-		                             SCTP_DEFAULT_VRFID, port);
-		#endif
 		if (recvmbuf[0]) {
 			m_freem(recvmbuf[0]);
 		}
@@ -1072,25 +1052,21 @@ setSendBufferSize(int sfd, int new_size)
 
 	if (setsockopt (sfd, SOL_SOCKET, SO_SNDBUF, (void*)&ch, sizeof(ch)) < 0) {
 #if defined(_WIN32)
-		SCTPDBG(SCTP_DEBUG_USR, "Can't set send-buffers size(%d) (errno = %d).\n", new_size, WSAGetLastError());
+		SCTPDBG(SCTP_DEBUG_USR, "Can't set send-buffers size (errno = %d).\n", WSAGetLastError());
 #else
-		SCTPDBG(SCTP_DEBUG_USR, "Can't set send-buffers size(%d) (errno = %d).\n", new_size, errno);
+		SCTPDBG(SCTP_DEBUG_USR, "Can't set send-buffers size (errno = %d).\n", errno);
+#endif
+#if defined(SCTP_USE_LWIP)
+		SCTP_PRINTF("lwIP does not support this socket option(SO_SNDBUF:%d), so you need to control this by yourself.", new_size);
 #endif
 	}
 	return;
 }
 
 #define SOCKET_TIMEOUT 100 /* in ms */
-/**
- * @brief	the initialization of reception threads.
- * 			Create one thread for each sockets, and means one thread for one sockt.
- * 
- *
-*/
 void
 recv_thread_init(void)
 {
-	SCTP_ENTER();
 #if defined(INET)
 	struct sockaddr_in addr_ipv4;
 	const int hdrincl = 1;
@@ -1101,7 +1077,6 @@ recv_thread_init(void)
 #if defined(INET) || defined(INET6)
 	const int on = 1;
 #endif
-
 #if !defined(_WIN32)
 	struct timeval timeout;
 
@@ -1111,7 +1086,6 @@ recv_thread_init(void)
 #else
 	unsigned int timeout = SOCKET_TIMEOUT; /* Timeout in milliseconds */
 #endif
-
 #if defined(__APPLE__) || defined(__DragonFly__) || defined(__FreeBSD__)
 	if (SCTP_BASE_VAR(userspace_route) == -1) {
 		if ((SCTP_BASE_VAR(userspace_route) = socket(AF_ROUTE, SOCK_RAW, 0)) == -1) {
@@ -1151,16 +1125,8 @@ recv_thread_init(void)
 		}
 	}
 #endif
-/**
- * IPV4
-*/
 #if defined(INET)
-	/**
-	 * setup the raw sctp socket.
-	*/
 	if (SCTP_BASE_VAR(userspace_rawsctp) == -1) {
-
-		SCTPDBG(SCTP_DEBUG_USR, "Create rawsctp socket for IPv4... \n");
 		if ((SCTP_BASE_VAR(userspace_rawsctp) = socket(AF_INET, SOCK_RAW, IPPROTO_SCTP)) == -1) {
 #if defined(_WIN32)
 			SCTPDBG(SCTP_DEBUG_USR, "Can't create raw socket for IPv4 (errno = %d).\n", WSAGetLastError());
@@ -1169,8 +1135,7 @@ recv_thread_init(void)
 #endif
 		} else {
 			/* complete setting up the raw SCTP socket */
-			SCTPDBG(SCTP_DEBUG_USR, "Configure rawsctp socket for IPv4... \n");
-			if (setsockopt(SCTP_BASE_VAR(userspace_rawsctp), IPPROTO_IP, LWIP_IP_HDRINCL,(const void*)&hdrincl, sizeof(int)) < 0) {
+			if (setsockopt(SCTP_BASE_VAR(userspace_rawsctp), IPPROTO_IP, IP_HDRINCL,(const void*)&hdrincl, sizeof(int)) < 0) {
 #if defined(_WIN32)
 				SCTPDBG(SCTP_DEBUG_USR, "Can't set IP_HDRINCL (errno = %d).\n", WSAGetLastError());
 				closesocket(SCTP_BASE_VAR(userspace_rawsctp));
@@ -1179,8 +1144,7 @@ recv_thread_init(void)
 				close(SCTP_BASE_VAR(userspace_rawsctp));
 #endif
 				SCTP_BASE_VAR(userspace_rawsctp) = -1;
-			}
-			else if (setsockopt(SCTP_BASE_VAR(userspace_rawsctp), SOL_SOCKET, SO_RCVTIMEO, (const void *)&timeout, sizeof(timeout)) < 0){
+			} else if (setsockopt(SCTP_BASE_VAR(userspace_rawsctp), SOL_SOCKET, SO_RCVTIMEO, (const void *)&timeout, sizeof(timeout)) < 0) {
 #if defined(_WIN32)
 				SCTPDBG(SCTP_DEBUG_USR, "Can't set timeout on socket for SCTP/IPv4 (errno = %d).\n", WSAGetLastError());
 				closesocket(SCTP_BASE_VAR(userspace_rawsctp));
@@ -1189,8 +1153,7 @@ recv_thread_init(void)
 				close(SCTP_BASE_VAR(userspace_rawsctp));
 #endif
 				SCTP_BASE_VAR(userspace_rawsctp) = -1;
-			}
-			else{
+			} else {
 				memset((void *)&addr_ipv4, 0, sizeof(struct sockaddr_in));
 #ifdef HAVE_SIN_LEN
 				addr_ipv4.sin_len         = sizeof(struct sockaddr_in);
@@ -1198,7 +1161,6 @@ recv_thread_init(void)
 				addr_ipv4.sin_family      = AF_INET;
 				addr_ipv4.sin_port        = htons(0);
 				addr_ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
-				SCTPDBG(SCTP_DEBUG_USR, "Bind rawsctp socket for IPv4... \n");
 				if (bind(SCTP_BASE_VAR(userspace_rawsctp), (const struct sockaddr *)&addr_ipv4, sizeof(struct sockaddr_in)) < 0) {
 #if defined(_WIN32)
 					SCTPDBG(SCTP_DEBUG_USR, "Can't bind socket for SCTP/IPv4 (errno = %d).\n", WSAGetLastError());
@@ -1209,27 +1171,20 @@ recv_thread_init(void)
 #endif
 					SCTP_BASE_VAR(userspace_rawsctp) = -1;
 				} else {
-					SCTPDBG(SCTP_DEBUG_USR, "Set send/receive buf size for rawsctp socket for IPv4... \n");
 					setReceiveBufferSize(SCTP_BASE_VAR(userspace_rawsctp), SB_RAW); /* 128K */
 					setSendBufferSize(SCTP_BASE_VAR(userspace_rawsctp), SB_RAW); /* 128K Is this setting net.inet.raw.maxdgram value? Should it be set to 64K? */
 				}
 			}
 		}
 	}
-	/**
-	 * setup the udp sctp socket.
-	*/
 	if (SCTP_BASE_VAR(userspace_udpsctp) == -1) {
-		SCTPDBG(SCTP_DEBUG_USR, "Create udpsctp socket for IPv4... \n");
 		if ((SCTP_BASE_VAR(userspace_udpsctp) = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
 #if defined(_WIN32)
 			SCTPDBG(SCTP_DEBUG_USR, "Can't create socket for SCTP/UDP/IPv4 (errno = %d).\n", WSAGetLastError());
 #else
 			SCTPDBG(SCTP_DEBUG_USR, "Can't create socket for SCTP/UDP/IPv4 (errno = %d).\n", errno);
 #endif
-		} 
-		else {
-			SCTPDBG(SCTP_DEBUG_USR, "Configure udpsctp socket for IPv4... \n");
+		} else {
 #if defined(IP_PKTINFO)
 			if (setsockopt(SCTP_BASE_VAR(userspace_udpsctp), IPPROTO_IP, IP_PKTINFO, (const void *)&on, (int)sizeof(int)) < 0) {
 #else
@@ -1251,8 +1206,7 @@ recv_thread_init(void)
 				close(SCTP_BASE_VAR(userspace_udpsctp));
 #endif
 				SCTP_BASE_VAR(userspace_udpsctp) = -1;
-			}
-			else if (setsockopt(SCTP_BASE_VAR(userspace_udpsctp), SOL_SOCKET, SO_RCVTIMEO, (const void *)&timeout, sizeof(timeout)) < 0) {
+			} else if (setsockopt(SCTP_BASE_VAR(userspace_udpsctp), SOL_SOCKET, SO_RCVTIMEO, (const void *)&timeout, sizeof(timeout)) < 0) {
 #if defined(_WIN32)
 				SCTPDBG(SCTP_DEBUG_USR, "Can't set timeout on socket for SCTP/UDP/IPv4 (errno = %d).\n", WSAGetLastError());
 				closesocket(SCTP_BASE_VAR(userspace_udpsctp));
@@ -1269,7 +1223,6 @@ recv_thread_init(void)
 				addr_ipv4.sin_family      = AF_INET;
 				addr_ipv4.sin_port        = htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port));
 				addr_ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
-				SCTPDBG(SCTP_DEBUG_USR, "bind udpsctp socket for IPv4... \n");
 				if (bind(SCTP_BASE_VAR(userspace_udpsctp), (const struct sockaddr *)&addr_ipv4, sizeof(struct sockaddr_in)) < 0) {
 #if defined(_WIN32)
 					SCTPDBG(SCTP_DEBUG_USR, "Can't bind socket for SCTP/UDP/IPv4 (errno = %d).\n", WSAGetLastError());
@@ -1280,7 +1233,6 @@ recv_thread_init(void)
 #endif
 					SCTP_BASE_VAR(userspace_udpsctp) = -1;
 				} else {
-					SCTPDBG(SCTP_DEBUG_USR, "Set send/receive buf size for udpsctp socket for IPv4... \n");
 					setReceiveBufferSize(SCTP_BASE_VAR(userspace_udpsctp), SB_RAW); /* 128K */
 					setSendBufferSize(SCTP_BASE_VAR(userspace_udpsctp), SB_RAW); /* 128K Is this setting net.inet.raw.maxdgram value? Should it be set to 64K? */
 				}
@@ -1288,14 +1240,7 @@ recv_thread_init(void)
 		}
 	}
 #endif
-
-/**
- * IPV6.
-*/
 #if defined(INET6)
-	/**
-	 * userspace_rawsctp6
-	*/
 	if (SCTP_BASE_VAR(userspace_rawsctp6) == -1) {
 		if ((SCTP_BASE_VAR(userspace_rawsctp6) = socket(AF_INET6, SOCK_RAW, IPPROTO_SCTP)) == -1) {
 #if defined(_WIN32)
@@ -1369,9 +1314,6 @@ recv_thread_init(void)
 			}
 		}
 	}
-	/**
-	 * userspace_udpsctp6
-	*/
 	if (SCTP_BASE_VAR(userspace_udpsctp6) == -1) {
 		if ((SCTP_BASE_VAR(userspace_udpsctp6) = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
 #if defined(_WIN32)
@@ -1444,7 +1386,6 @@ recv_thread_init(void)
 		}
 	}
 #endif
-
 #if defined(__APPLE__) || defined(__DragonFly__) || defined(__FreeBSD__)
 #if defined(INET) || defined(INET6)
 	if (SCTP_BASE_VAR(userspace_route) != -1) {
@@ -1458,15 +1399,10 @@ recv_thread_init(void)
 	}
 #endif
 #endif
-/**
- * IPV4
- * #thread.
-*/
 #if defined(INET)
-	/** userspace_rawsctp */
 	if (SCTP_BASE_VAR(userspace_rawsctp) != -1) {
 		int rc;
-		SCTPDBG(SCTP_DEBUG_USR, "create thread for rawsctp socket for IPv4... \n");
+
 		if ((rc = sctp_userspace_thread_create(&SCTP_BASE_VAR(recvthreadraw), &recv_function_raw))) {
 			SCTPDBG(SCTP_DEBUG_USR, "Can't start SCTP/IPv4 recv thread (%d).\n", rc);
 #if defined(_WIN32)
@@ -1477,10 +1413,9 @@ recv_thread_init(void)
 			SCTP_BASE_VAR(userspace_rawsctp) = -1;
 		}
 	}
-	/** userspace_udpsctp */
 	if (SCTP_BASE_VAR(userspace_udpsctp) != -1) {
 		int rc;
-		SCTPDBG(SCTP_DEBUG_USR, "create thread for udpsctp socket for IPv4... \n");
+
 		if ((rc = sctp_userspace_thread_create(&SCTP_BASE_VAR(recvthreadudp), &recv_function_udp))) {
 			SCTPDBG(SCTP_DEBUG_USR, "Can't start SCTP/UDP/IPv4 recv thread (%d).\n", rc);
 #if defined(_WIN32)
@@ -1492,9 +1427,6 @@ recv_thread_init(void)
 		}
 	}
 #endif
-/**
- * IPV6
-*/
 #if defined(INET6)
 	if (SCTP_BASE_VAR(userspace_rawsctp6) != -1) {
 		int rc;
@@ -1523,7 +1455,6 @@ recv_thread_init(void)
 		}
 	}
 #endif
-	SCTP_LEAVE();
 }
 
 void

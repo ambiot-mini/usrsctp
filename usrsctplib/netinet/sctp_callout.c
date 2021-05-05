@@ -58,6 +58,7 @@
 #include <netinet/sctp_callout.h>
 #include <netinet/sctp_pcb.h>
 #endif
+#include <user_config.h>
 #include <netinet/sctputil.h>
 
 /*
@@ -199,7 +200,7 @@ sctp_timeout(void *arg SCTP_UNUSED)
 void *
 user_sctp_timer_iterate(void *arg)
 {
-	sctp_userspace_set_threadname("SCTP timer");
+	sctp_userspace_set_threadname(SCTP_THREAD_TIMER_NAME);
 	for (;;) {
 #if defined(_WIN32)
 		Sleep(TIMEOUT_INTERVAL);
@@ -231,7 +232,7 @@ sctp_start_timer_thread(void)
 	 */
 	int rc;
 
-	rc = sctp_userspace_thread_create(&SCTP_BASE_VAR(timer_thread), user_sctp_timer_iterate);
+	rc = sctp_userspace_thread_create(&SCTP_BASE_VAR(timer_thread), user_sctp_timer_iterate, SCTP_THREAD_TIMER_NAME, SCTP_THREAD_TIMER_SIZE);
 	if (rc) {
 		SCTP_PRINTF("ERROR; return code from sctp_thread_create() is %d\n", rc);
 	} else {

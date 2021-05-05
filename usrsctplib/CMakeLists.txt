@@ -99,6 +99,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 list(APPEND usrsctp_root_headers
 	user_atomic.h
+	user_config.h
 	user_environment.h
 	user_inpcb.h
 	user_ip_icmp.h

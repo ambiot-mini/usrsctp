@@ -50,6 +50,7 @@ __FBSDID("$FreeBSD: head/sys/netinet/sctp_bsd_addr.c 358080 2020-02-18 19:41:55Z
 #include <netinet/sctp_asconf.h>
 #include <netinet/sctp_sysctl.h>
 #include <netinet/sctp_indata.h>
+#include <user_config.h>
 #if defined(__FreeBSD__) && !defined(__Userspace__)
 #include <sys/unistd.h>
 #endif
@@ -128,7 +129,7 @@ static void
 sctp_iterator_thread(void *v SCTP_UNUSED)
 {
 #if defined(__Userspace__)
-	sctp_userspace_set_threadname("SCTP iterator");
+	sctp_userspace_set_threadname(SCTP_THREAD_ITERATOR_NAME);
 #endif
 	SCTP_IPI_ITERATOR_WQ_LOCK();
 	/* In FreeBSD this thread never terminates. */
@@ -189,7 +190,7 @@ sctp_startup_iterator(void)
 	SCTP_IPI_ITERATOR_WQ_INIT();
 	TAILQ_INIT(&sctp_it_ctl.iteratorhead);
 #if defined(__Userspace__)
-	if (sctp_userspace_thread_create(&sctp_it_ctl.thread_proc, &sctp_iterator_thread)) {
+	if (sctp_userspace_thread_create(&sctp_it_ctl.thread_proc, &sctp_iterator_thread, SCTP_THREAD_ITERATOR_NAME, SCTP_THREAD_ITERATOR_SIZE)) {
 		SCTP_PRINTF("ERROR: Creating sctp_iterator_thread failed.\n");
 	} else {
 		SCTP_BASE_VAR(iterator_thread_started) = 1;

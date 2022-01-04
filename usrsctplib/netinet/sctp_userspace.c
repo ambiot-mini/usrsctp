@@ -133,7 +133,17 @@ sctp_userspace_thread_create(userland_thread_t *thread, start_routine_t start_ro
 int
 sctp_userspace_thread_create(userland_thread_t *thread, start_routine_t start_routine, const char* thread_name, uint32_t thread_size)
 {
-	return pthread_create(thread, NULL, start_routine, NULL);
+    pthread_attr_t *pAttr = NULL;
+    pthread_attr_t attr;
+    pAttr = &attr;
+    int result = 0;
+    result = pthread_attr_init(pAttr);
+    if(thread_size == 0){
+        pthread_attr_setstacksize(pAttr, SCTP_THREAD_DEFAULT_SIZE);
+    }else{
+        pthread_attr_setstacksize(pAttr, thread_size);
+    }
+    return pthread_create(thread, pAttr, start_routine, NULL);
 }
 #endif
 

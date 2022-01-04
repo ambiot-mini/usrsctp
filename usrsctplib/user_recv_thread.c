@@ -32,11 +32,11 @@
 #include <sys/types.h>
 #if !defined(_WIN32)
 #include <sys/socket.h>
-#include <netinet/in.h>
+//#include <netinet/in.h>
 #include <unistd.h>
 #include <pthread.h>
 #if !defined(__DragonFly__) && !defined(__FreeBSD__) && !defined(__NetBSD__)
-#include <sys/uio.h>
+//#include <sys/uio.h>
 #else
 #include <user_ip6_var.h>
 #endif

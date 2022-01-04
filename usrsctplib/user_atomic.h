@@ -132,7 +132,7 @@ static inline void atomic_init(void) {} /* empty when we are not using atomic_mt
 	} \
 }
 #endif
-static inline void atomic_init(void) {} /* empty when we are not using atomic_mtx */
+//static inline void atomic_init(void) {} /* empty when we are not using atomic_mtx */
 #endif
 
 #if 0 /* using libatomic_ops */

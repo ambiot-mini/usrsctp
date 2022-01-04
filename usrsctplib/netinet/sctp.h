@@ -669,4 +669,11 @@ struct sctp_error_auth_invalid_hmac {
 #define SCTP_LOG_AT_SEND_2_OUTQ				0x08000000
 #define SCTP_LOG_TRY_ADVANCE				0x10000000
 
+#if defined(KVS_PLAT_RTK_FREERTOS)
+#define SOCK_SEQPACKET  5
+#define MSG_EOR   0x8
+/* Maximum queue length specifiable by listen.  */
+#define SOMAXCONN       128
+#endif
+
 #endif				/* !_NETINET_SCTP_H_ */

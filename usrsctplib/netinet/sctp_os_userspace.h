@@ -41,6 +41,34 @@
  * We will place them in userspace stack build directory.
  */
 
+#if defined(KVS_PLAT_RTK_FREERTOS)
+typedef char* caddr_t;
+
+#define timeradd(tvp, uvp, vvp)   \
+	do {                          \
+	    (vvp)->tv_sec = (tvp)->tv_sec + (uvp)->tv_sec;  \
+		(vvp)->tv_usec = (tvp)->tv_usec + (uvp)->tv_usec;  \
+		if ((vvp)->tv_usec >= 1000000) {                   \
+		    (vvp)->tv_sec++;                        \
+			(vvp)->tv_usec -= 1000000;             \
+		}                         \
+	} while (0)
+
+#define timersub(tvp, uvp, vvp)   \
+	do {                          \
+	    (vvp)->tv_sec = (tvp)->tv_sec - (uvp)->tv_sec;  \
+		(vvp)->tv_usec = (tvp)->tv_usec - (uvp)->tv_usec;  \
+		if ((vvp)->tv_usec < 0) {                   \
+		    (vvp)->tv_sec--;                        \
+			(vvp)->tv_usec += 1000000;             \
+		}                       \
+	} while (0)
+
+#define	timercmp(tvp, uvp, cmp)						\
+	(((tvp)->tv_sec == (uvp)->tv_sec) ?				\
+	    ((tvp)->tv_usec cmp (uvp)->tv_usec) :			\
+	    ((tvp)->tv_sec cmp (uvp)->tv_sec))
+#endif
 
 #if !defined(SCTP_USE_LWIP)
 #include <errno.h>
@@ -468,7 +496,7 @@ struct sx {int dummy;};
 /* #include <net/route.h> */
 #if !defined(_WIN32) && !defined(__native_client__)
 #include <net/if.h>
-#include <netinet/in.h>
+//#include <netinet/in.h>
 #if !defined(SCTP_USE_LWIP)
 #include <netinet/in_systm.h>
 #endif
@@ -494,7 +522,7 @@ struct sx {int dummy;};
 #endif
 
 /* for ioctl */
-#include <sys/ioctl.h>
+//#include <sys/ioctl.h>
 
 /* for close, etc. */
 #include <unistd.h>

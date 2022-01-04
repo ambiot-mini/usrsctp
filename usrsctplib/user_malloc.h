@@ -65,6 +65,13 @@
 
 #define	M_MAGIC		877983977	/* time when first defined :-) */
 
+#if defined(KVS_PLAT_RTK_FREERTOS)
+#define u_char                   uint8_t
+#define u_short                  uint16_t
+#define u_int                    uint32_t
+#define u_long                   uint32_t
+#endif
+
 /*
  * Two malloc type structures are present: malloc_type, which is used by a
  * type owner to declare the type, and malloc_type_internal, which holds

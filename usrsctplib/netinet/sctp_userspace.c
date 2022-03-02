@@ -37,10 +37,15 @@
 #endif
 #include <user_config.h>
 
-#if defined(SCTP_USE_RTOS)
+#if (defined(SCTP_USE_RTOS) && defined(KVS_PLAT_RTK_FREERTOS))
+#include "pthread.h"
+#endif
+
+#if (defined(SCTP_USE_RTOS) && defined(KVS_PLAT_ESP_FREERTOS))
 #include <netinet/sctp_pcb.h>
 #include "esp_pthread.h"
 #endif
+
 #include <netinet/sctp_os_userspace.h>
 #if defined(__FreeBSD__)
 #include <pthread_np.h>
@@ -80,7 +85,7 @@ sctp_userspace_thread_create(userland_thread_t *thread, start_routine_t start_ro
 #pragma GCC diagnostic pop
 #endif
 
-#elif defined(SCTP_USE_RTOS)
+#elif (defined(SCTP_USE_RTOS) && defined(KVS_PLAT_ESP_FREERTOS))
 #include "esp_pthread.h"
 
 int
@@ -129,6 +134,54 @@ sctp_userspace_thread_create(userland_thread_t *thread, start_routine_t start_ro
 
 	return pthread_create(thread, pAttr, start_routine, NULL);
 }
+
+#elif (defined(SCTP_USE_RTOS) && defined(KVS_PLAT_RTK_FREERTOS))
+
+sctp_userspace_thread_create(userland_thread_t *thread, start_routine_t start_routine, const char* thread_name, uint32_t thread_size)
+{
+    pthread_attr_t *pAttr = NULL;
+    pthread_attr_t attr;
+    pAttr = &attr;
+    int result = 0;
+    result = pthread_attr_init(pAttr);
+    if (result != 0) {
+        printf("pthread_attr_init failed with %u\r\n", result);
+    }
+
+    if(thread_size == 0){
+        result = pthread_attr_setstacksize(pAttr, SCTP_THREAD_DEFAULT_SIZE);
+    }else{
+        result = pthread_attr_setstacksize(pAttr, thread_size);
+    }
+    if (result != 0) {
+        printf("pthread_attr_setstacksize failed with %u\r\n", result);
+    }
+
+    struct sched_param param;
+    result = pthread_attr_getschedparam(pAttr, &param);
+    if (result != 0) {
+        printf("pthread_attr_getschedparam failed with %u\r\n", result);
+    }
+    param.sched_priority = tskIDLE_PRIORITY + 1;
+    result = pthread_attr_setschedparam(pAttr, &param);
+    if (result != 0) {
+        printf("pthread_attr_setschedparam failed with %u\r\n", result);
+    }
+
+    result = pthread_create(thread, pAttr, start_routine, NULL);
+    if (result != 0) {
+        printf("pthread_create failed with %u\r\n", result);
+    }
+    if (pAttr != NULL) {
+        result = pthread_attr_destroy(pAttr);
+        if (result != 0) {
+            printf("pthread_attr_destroy failed with %u\r\n", result);
+        }
+    }
+
+    return result;
+}
+
 #else
 int
 sctp_userspace_thread_create(userland_thread_t *thread, start_routine_t start_routine, const char* thread_name, uint32_t thread_size)

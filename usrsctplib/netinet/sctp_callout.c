@@ -220,6 +220,7 @@ user_sctp_timer_iterate(void *arg)
 		}
 		sctp_handle_tick(sctp_msecs_to_ticks(TIMEOUT_INTERVAL));
 	}
+	pthread_exit(NULL);
 	return (NULL);
 }
 

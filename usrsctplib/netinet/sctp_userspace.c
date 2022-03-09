@@ -168,6 +168,14 @@ sctp_userspace_thread_create(userland_thread_t *thread, start_routine_t start_ro
         printf("pthread_attr_setschedparam failed with %u\r\n", result);
     }
 
+    if (thread_name == NULL) {
+        pthread_set_name(SCTP_THREAD_DEFAULT_NAME);
+        printf("set the RTK pthread name: %s \r\n", SCTP_THREAD_DEFAULT_NAME);
+    } else {
+        pthread_set_name(thread_name);
+        printf("set the RTK pthread name: %s \r\n", thread_name);
+    }
+
     result = pthread_create(thread, pAttr, start_routine, NULL);
     if (result != 0) {
         printf("pthread_create failed with %u\r\n", result);

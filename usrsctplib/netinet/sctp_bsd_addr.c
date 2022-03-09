@@ -167,6 +167,7 @@ sctp_iterator_thread(void *v SCTP_UNUSED)
 	SCTP_IPI_ITERATOR_WQ_UNLOCK();
 #if defined(__Userspace__)
 	sctp_wakeup_iterator();
+	pthread_exit(NULL);
 	return (NULL);
 #else
 	wakeup(&sctp_it_ctl.iterator_flags);

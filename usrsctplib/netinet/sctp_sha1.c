@@ -34,6 +34,9 @@
  */
 
 #include <netinet/sctp_sha1.h>
+#if (MBEDTLS_VERSION_NUMBER==0x03000000 || MBEDTLS_VERSION_NUMBER==0x03020100)
+#include <mbedtls/compat-2.x.h>
+#endif
 
 #if defined(SCTP_USE_NSS_SHA1)
 /* A SHA-1 Digest is 160 bits, or 20 bytes */
